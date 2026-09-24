@@ -1,6 +1,70 @@
 {
-  "name": "Confidence-Gated Inbox Autopilot - Final (NextWork)",
+  "name": "Confidence-Gated Inbox Autopilot - Vercel (NextWork)",
   "nodes": [
+    {
+      "parameters": {
+        "content": "# Capture and classify\n\nThe Gmail Trigger polls for one unread test message. Normalize Email keeps the message ID, sender, subject, and the first 1,500 characters of the plain-text body.\n\nAsk Jev sends those fields through Vercel AI Gateway with the `typesafe-ai/jev` model. Add your Vercel key as an n8n Bearer Auth credential before testing.",
+        "height": 400,
+        "width": 900,
+        "color": 4
+      },
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Sticky Note - Capture and Classify",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# Gate and route safely\n\nConfidence Gate requires category confidence of at least `0.80`. Accepted decisions reach Route Category. Lower-confidence results take the review branch.\n\nRoute Category maps `Clients`, `Receipts`, `Newsletters`, and `Personal`. Its fallback also uses the review branch.",
+        "height": 380,
+        "width": 620,
+        "color": 5
+      },
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Sticky Note - Gate and Route",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# Apply Gmail actions\n\nConfigure each empty label selector after import.\n\n* `Autopilot/Unsure`: Add the label and mark the message as read.\n* `Clients`, `Receipts`, and `Personal`: Add the matching label and mark the message as read.\n* `Newsletters`: Add the label, remove `INBOX`, and mark the message as read.\n\nEvery action uses the original message ID from Normalize Email.",
+        "height": 1050,
+        "width": 940,
+        "color": 6
+      },
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "Sticky Note - Gmail Actions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        -520
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# Alert on urgent human mail\n\nTelegram runs only when every condition passes:\n\n* Urgency score is at least `1.5`.\n* Urgency confidence is at least `0.80`.\n* Real-person probability is at least `0.70`.\n\nSelect your Telegram credential and enter your Chat ID after import.",
+        "height": 400,
+        "width": 620,
+        "color": 3
+      },
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "Sticky Note - Urgent Alerts",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        400
+      ]
+    },
     {
       "parameters": {
         "pollTimes": {
@@ -25,8 +89,8 @@
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1.4,
       "position": [
-        -900,
-        260
+        -1080,
+        0
       ]
     },
     {
@@ -55,33 +119,33 @@
             {
               "id": "a994cd95-bd0c-4940-9ee5-2a08fd895fd4",
               "name": "body",
-              "value": "={{ $json.text ?? '' }}",
+              "value": "={{ ($json.text ?? '').slice(0, 1500) }}",
               "type": "string"
             },
             {
               "id": "334ee1ce-acac-4c88-90d7-5b44e33fb978",
               "name": "jevEndpoint",
-              "value": "https://api.typesafe.ai/v1/systemone",
+              "value": "https://ai-gateway.vercel.sh/typesafe/v1/systemone",
               "type": "string"
             },
             {
               "id": "342e1b3d-2df7-4175-95b6-a21d8dca18c9",
               "name": "jevModel",
-              "value": "jev-1.13.0",
+              "value": "typesafe-ai/jev",
               "type": "string"
             }
           ]
         },
         "options": {}
       },
+      "id": "9d0cb1ab-8acd-4cab-aad4-0e0af93163ec",
+      "name": "Normalize Email",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -650,
-        260
-      ],
-      "id": "9d0cb1ab-8acd-4cab-aad4-0e0af93163ec",
-      "name": "Normalize Email"
+        -820,
+        0
+      ]
     },
     {
       "parameters": {
@@ -92,7 +156,7 @@
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={\n  \"state\": {\n    \"sender\": {{ $json.sender.toJsonString() }},\n    \"subject\": {{ $json.subject.toJsonString() }},\n    \"body\": {{ $json.body.slice(0, 1500).toJsonString() }}\n  },\n  \"model\": {{ $json.jevModel.toJsonString() }},\n  \"questions\": {\n    \"category\": {\n      \"type\": \"choice\",\n      \"instructions\": \"Classify the primary purpose of this email.\",\n      \"criteria\": {\n        \"Clients\": \"A message from or about a client, lead, project, or business relationship.\",\n        \"Receipts\": \"A purchase receipt, invoice, billing confirmation, or transaction record.\",\n        \"Newsletters\": \"A bulk newsletter, marketing update, promotion, or recurring publication.\",\n        \"Personal\": \"A personal message that does not belong in the other categories.\"\n      }\n    },\n    \"urgency\": {\n      \"type\": \"score\",\n      \"instructions\": \"Rate how urgently the recipient should respond.\",\n      \"criteria\": [\n        \"Low: informational or no response needed.\",\n        \"Medium: a response is useful but not time-critical.\",\n        \"High: time-sensitive, blocking, or requires prompt attention.\"\n      ]\n    },\n    \"real_person\": {\n      \"type\": \"noul\",\n      \"instructions\": \"Was this message written by a real person expecting an individual response?\"\n    }\n  }\n}",
+        "jsonBody": "={\n  \"state\": {\n    \"sender\": {{ $json.sender.toJsonString() }},\n    \"subject\": {{ $json.subject.toJsonString() }},\n    \"body\": {{ $json.body.toJsonString() }}\n  },\n  \"model\": {{ $json.jevModel.toJsonString() }},\n  \"questions\": {\n    \"category\": {\n      \"type\": \"choice\",\n      \"instructions\": \"Classify the primary purpose of this email.\",\n      \"criteria\": {\n        \"Clients\": \"A message from or about a client, lead, project, or business relationship.\",\n        \"Receipts\": \"A purchase receipt, invoice, billing confirmation, or transaction record.\",\n        \"Newsletters\": \"A bulk newsletter, marketing update, promotion, or recurring publication.\",\n        \"Personal\": \"A personal message that does not belong in the other categories.\"\n      }\n    },\n    \"urgency\": {\n      \"type\": \"score\",\n      \"instructions\": \"Rate how urgently the recipient should respond.\",\n      \"criteria\": [\n        \"Low: informational or no response needed.\",\n        \"Medium: a response is useful but not time-critical.\",\n        \"High: time-sensitive, blocking, or requires prompt attention.\"\n      ]\n    },\n    \"real_person\": {\n      \"type\": \"noul\",\n      \"instructions\": \"Was this message written by a real person expecting an individual response?\"\n    }\n  }\n}",
         "options": {
           "response": {
             "response": {
@@ -101,14 +165,47 @@
           }
         }
       },
+      "id": "4f916395-605b-42c1-ae88-a526ec4979aa",
+      "name": "Ask Jev",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -400,
-        260
-      ],
-      "id": "4f916395-605b-42c1-ae88-a526ec4979aa",
-      "name": "Ask Jev"
+        -560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "40000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.answers.category.confidence }}",
+              "rightValue": 0.8,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000004",
+      "name": "Confidence Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -180,
+        -120
+      ]
     },
     {
       "parameters": {
@@ -221,41 +318,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        100,
-        -100
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "40000000-0000-4000-8000-000000000001",
-              "leftValue": "={{ $json.answers.category.confidence }}",
-              "rightValue": 0.8,
-              "operator": {
-                "type": "number",
-                "operation": "gte"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "10000000-0000-4000-8000-000000000004",
-      "name": "Confidence Gate",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        -150,
-        -100
+        80,
+        -120
       ]
     },
     {
@@ -270,8 +334,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        100,
-        260
+        480,
+        360
       ]
     },
     {
@@ -285,8 +349,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        400,
-        260
+        740,
+        360
       ]
     },
     {
@@ -301,8 +365,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        400,
-        -260
+        480,
+        -360
       ]
     },
     {
@@ -316,8 +380,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        700,
-        -260
+        740,
+        -360
       ]
     },
     {
@@ -332,8 +396,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        400,
-        -80
+        480,
+        -180
       ]
     },
     {
@@ -347,8 +411,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        700,
-        -80
+        740,
+        -180
       ]
     },
     {
@@ -363,8 +427,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        400,
-        100
+        480,
+        0
       ]
     },
     {
@@ -381,8 +445,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        700,
-        100
+        740,
+        0
       ]
     },
     {
@@ -397,7 +461,7 @@
       "typeVersion": 2.2,
       "position": [
         1000,
-        100
+        0
       ]
     },
     {
@@ -412,8 +476,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        400,
-        440
+        480,
+        180
       ]
     },
     {
@@ -427,8 +491,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        700,
-        440
+        740,
+        180
       ]
     },
     {
@@ -478,8 +542,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -150,
-        620
+        -180,
+        520
       ]
     },
     {
@@ -497,12 +561,50 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        150,
-        620
+        80,
+        520
       ]
     }
   ],
   "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Email": {
+      "main": [
+        [
+          {
+            "node": "Ask Jev",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Jev": {
+      "main": [
+        [
+          {
+            "node": "Confidence Gate",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Urgent Human Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Confidence Gate": {
       "main": [
         [
@@ -515,17 +617,6 @@
         [
           {
             "node": "Unsure Add Label",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Unsure Add Label": {
-      "main": [
-        [
-          {
-            "node": "Unsure Mark as Read",
             "type": "main",
             "index": 0
           }
@@ -565,6 +656,17 @@
         [
           {
             "node": "Unsure Add Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsure Add Label": {
+      "main": [
+        [
+          {
+            "node": "Unsure Mark as Read",
             "type": "main",
             "index": 0
           }
@@ -636,44 +738,6 @@
           }
         ],
         []
-      ]
-    },
-    "Gmail Trigger": {
-      "main": [
-        [
-          {
-            "node": "Normalize Email",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Normalize Email": {
-      "main": [
-        [
-          {
-            "node": "Ask Jev",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Ask Jev": {
-      "main": [
-        [
-          {
-            "node": "Confidence Gate",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Urgent Human Gate",
-            "type": "main",
-            "index": 0
-          }
-        ]
       ]
     }
   },
