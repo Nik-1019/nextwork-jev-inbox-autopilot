@@ -1,0 +1,685 @@
+{
+  "name": "Confidence-Gated Inbox Autopilot - Final (NextWork)",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 1,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "simple": false,
+        "maxResults": 1,
+        "filters": {
+          "q": "subject:NW-TRIAGE-TEST",
+          "readStatus": "unread"
+        },
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000001",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -900,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "98d5c24e-2a55-49cc-80b5-b8837f64cfd9",
+              "name": "messageId",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "b6211521-5245-48f5-b85c-723203be4e66",
+              "name": "sender",
+              "value": "={{ $json.from?.text ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "84ccdbdf-fc6d-4bf8-aa10-aa6d83aaf833",
+              "name": "subject",
+              "value": "={{ $json.subject ?? '(no subject)' }}",
+              "type": "string"
+            },
+            {
+              "id": "a994cd95-bd0c-4940-9ee5-2a08fd895fd4",
+              "name": "body",
+              "value": "={{ $json.text ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "334ee1ce-acac-4c88-90d7-5b44e33fb978",
+              "name": "jevEndpoint",
+              "value": "https://api.typesafe.ai/v1/systemone",
+              "type": "string"
+            },
+            {
+              "id": "342e1b3d-2df7-4175-95b6-a21d8dca18c9",
+              "name": "jevModel",
+              "value": "jev-1.13.0",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -650,
+        260
+      ],
+      "id": "9d0cb1ab-8acd-4cab-aad4-0e0af93163ec",
+      "name": "Normalize Email"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.jevEndpoint }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"state\": {\n    \"sender\": {{ $json.sender.toJsonString() }},\n    \"subject\": {{ $json.subject.toJsonString() }},\n    \"body\": {{ $json.body.slice(0, 1500).toJsonString() }}\n  },\n  \"model\": {{ $json.jevModel.toJsonString() }},\n  \"questions\": {\n    \"category\": {\n      \"type\": \"choice\",\n      \"instructions\": \"Classify the primary purpose of this email.\",\n      \"criteria\": {\n        \"Clients\": \"A message from or about a client, lead, project, or business relationship.\",\n        \"Receipts\": \"A purchase receipt, invoice, billing confirmation, or transaction record.\",\n        \"Newsletters\": \"A bulk newsletter, marketing update, promotion, or recurring publication.\",\n        \"Personal\": \"A personal message that does not belong in the other categories.\"\n      }\n    },\n    \"urgency\": {\n      \"type\": \"score\",\n      \"instructions\": \"Rate how urgently the recipient should respond.\",\n      \"criteria\": [\n        \"Low: informational or no response needed.\",\n        \"Medium: a response is useful but not time-critical.\",\n        \"High: time-sensitive, blocking, or requires prompt attention.\"\n      ]\n    },\n    \"real_person\": {\n      \"type\": \"noul\",\n      \"instructions\": \"Was this message written by a real person expecting an individual response?\"\n    }\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        260
+      ],
+      "id": "4f916395-605b-42c1-ae88-a526ec4979aa",
+      "name": "Ask Jev"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "20000000-0000-4000-8000-000000000001",
+                    "leftValue": "={{ $json.answers.category.choice }}",
+                    "rightValue": "Clients",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Clients"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "20000000-0000-4000-8000-000000000002",
+                    "leftValue": "={{ $json.answers.category.choice }}",
+                    "rightValue": "Receipts",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Receipts"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "20000000-0000-4000-8000-000000000003",
+                    "leftValue": "={{ $json.answers.category.choice }}",
+                    "rightValue": "Newsletters",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Newsletters"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "20000000-0000-4000-8000-000000000004",
+                    "leftValue": "={{ $json.answers.category.choice }}",
+                    "rightValue": "Personal",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Personal"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "10000000-0000-4000-8000-000000000002",
+      "name": "Route Category",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        100,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "40000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.answers.category.confidence }}",
+              "rightValue": 0.8,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000004",
+      "name": "Confidence Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -150,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "addLabels",
+        "messageId": "={{ $('Normalize Email').item.json.messageId }}",
+        "labelIds": []
+      },
+      "id": "10000000-0000-4000-8000-000000000005",
+      "name": "Unsure Add Label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        100,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "markAsRead",
+        "messageId": "={{ $('Normalize Email').item.json.messageId }}"
+      },
+      "id": "10000000-0000-4000-8000-000000000006",
+      "name": "Unsure Mark as Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "addLabels",
+        "messageId": "={{ $('Normalize Email').item.json.messageId }}",
+        "labelIds": []
+      },
+      "id": "10000000-0000-4000-8000-000000000007",
+      "name": "Clients Add Label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "markAsRead",
+        "messageId": "={{ $('Normalize Email').item.json.messageId }}"
+      },
+      "id": "10000000-0000-4000-8000-000000000008",
+      "name": "Clients Mark as Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        700,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "addLabels",
+        "messageId": "={{ $('Normalize Email').item.json.messageId }}",
+        "labelIds": []
+      },
+      "id": "10000000-0000-4000-8000-000000000009",
+      "name": "Receipts Add Label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "markAsRead",
+        "messageId": "={{ $('Normalize Email').item.json.messageId }}"
+      },
+      "id": "10000000-0000-4000-8000-000000000010",
+      "name": "Receipts Mark as Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        700,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "addLabels",
+        "messageId": "={{ $('Normalize Email').item.json.messageId }}",
+        "labelIds": []
+      },
+      "id": "10000000-0000-4000-8000-000000000011",
+      "name": "Newsletters Add Label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "removeLabels",
+        "messageId": "={{ $('Normalize Email').item.json.messageId }}",
+        "labelIds": [
+          "INBOX"
+        ]
+      },
+      "id": "10000000-0000-4000-8000-000000000012",
+      "name": "Newsletters Remove INBOX",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        700,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "markAsRead",
+        "messageId": "={{ $('Normalize Email').item.json.messageId }}"
+      },
+      "id": "10000000-0000-4000-8000-000000000013",
+      "name": "Newsletters Mark as Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1000,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "addLabels",
+        "messageId": "={{ $('Normalize Email').item.json.messageId }}",
+        "labelIds": []
+      },
+      "id": "10000000-0000-4000-8000-000000000014",
+      "name": "Personal Add Label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "markAsRead",
+        "messageId": "={{ $('Normalize Email').item.json.messageId }}"
+      },
+      "id": "10000000-0000-4000-8000-000000000015",
+      "name": "Personal Mark as Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        700,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "50000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.answers.urgency.score }}",
+              "rightValue": 1.5,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "50000000-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.answers.urgency.confidence }}",
+              "rightValue": 0.8,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "50000000-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.answers.real_person.noul }}",
+              "rightValue": 0.7,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "10000000-0000-4000-8000-000000000016",
+      "name": "Urgent Human Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -150,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "",
+        "text": "=Urgent email\nFrom: {{ $('Normalize Email').item.json.sender }}\nSubject: {{ $('Normalize Email').item.json.subject }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "10000000-0000-4000-8000-000000000017",
+      "name": "Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        150,
+        620
+      ]
+    }
+  ],
+  "connections": {
+    "Confidence Gate": {
+      "main": [
+        [
+          {
+            "node": "Route Category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsure Add Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsure Add Label": {
+      "main": [
+        [
+          {
+            "node": "Unsure Mark as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Category": {
+      "main": [
+        [
+          {
+            "node": "Clients Add Label",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Receipts Add Label",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Newsletters Add Label",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Personal Add Label",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsure Add Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clients Add Label": {
+      "main": [
+        [
+          {
+            "node": "Clients Mark as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receipts Add Label": {
+      "main": [
+        [
+          {
+            "node": "Receipts Mark as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Newsletters Add Label": {
+      "main": [
+        [
+          {
+            "node": "Newsletters Remove INBOX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Newsletters Remove INBOX": {
+      "main": [
+        [
+          {
+            "node": "Newsletters Mark as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Personal Add Label": {
+      "main": [
+        [
+          {
+            "node": "Personal Mark as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Urgent Human Gate": {
+      "main": [
+        [
+          {
+            "node": "Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Email": {
+      "main": [
+        [
+          {
+            "node": "Ask Jev",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Jev": {
+      "main": [
+        [
+          {
+            "node": "Confidence Gate",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Urgent Human Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
